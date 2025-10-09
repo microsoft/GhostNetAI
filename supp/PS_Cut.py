@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
 # %% This File Cuts Puget Sound images into small 1000 X 250 patches for standard scale.
 import json
 import os

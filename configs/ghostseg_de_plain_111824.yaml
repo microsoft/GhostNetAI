@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
 # training
 conf_id: GhostSeg_DE_Plain_111824 
 algorithm: Plain
