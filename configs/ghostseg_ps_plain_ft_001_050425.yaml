@@ -6,7 +6,7 @@ log_interval: 10
 parallel: 0
 
 # data
-dataset_root: /home/miao/datasets/wwf_seg/PugetSound/2024_04_04_cut
+dataset_root: ~/datasets/wwf_seg/PugetSound/2024_04_04_cut # directory to dataset
 dataset_name: GhostSeg_PS
 num_classes: 2
 batch_size: 16

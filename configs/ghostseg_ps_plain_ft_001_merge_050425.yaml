@@ -6,7 +6,7 @@ log_interval: 10
 parallel: 0
 
 # data
-dataset_root: /home/miao/datasets/wwf_seg/
+dataset_root: ~/datasets/wwf_seg/
 dataset_name: GhostSeg_DEPS
 num_classes: 2
 batch_size: 16
