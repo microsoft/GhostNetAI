@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
 # training
 conf_id: GhostSeg_PS_LA_FT_001_050425 
 algorithm: LA
@@ -6,7 +8,7 @@ log_interval: 10
 parallel: 0
 
 # data
-dataset_root: /home/miao/datasets/wwf_seg/PugetSound/2024_04_04_cut
+dataset_root: ~/datasets/wwf_seg/PugetSound/2024_04_04_cut # directory to dataset
 dataset_name: GhostSeg_PS
 num_classes: 2
 batch_size: 16

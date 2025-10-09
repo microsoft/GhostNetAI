@@ -1,3 +1,5 @@
+<!-- # Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License. -->
 <!-- BEGIN MICROSOFT SECURITY.MD V1.0.0 BLOCK -->
 
 ## Security

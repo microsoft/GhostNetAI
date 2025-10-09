@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
 # %%
 import os
 import numpy as np
@@ -14,15 +16,15 @@ from shapely.geometry import Polygon
 import pygeoops
 
 # %%
-# data_root = os.path.join('/home/miao/datasets/wwf_ghostnet',
+# data_root = os.path.join('~/wwf_ghostnet',
 #                          'Ghostnet-labeling-2025-05-21')
 # ann_path = os.path.join(data_root, 'ann/2025_05_21_ann.json')
 
-# data_root = os.path.join('/home/miao/datasets/wwf_ghostnet',
+# data_root = os.path.join('~/wwf_ghostnet',
 #                          'Ghostnet-labeldata-2024-04-04')
 # ann_path = os.path.join(data_root, '2024_04_04_ann.json')
 
-data_root = os.path.join('/home/miao/datasets/wwf_ghostnet',
+data_root = os.path.join('~/datasets/wwf_ghostnet',
                          '28.01.2025')
 ann_path = os.path.join(data_root, '2025_01_28_ann.json')
 

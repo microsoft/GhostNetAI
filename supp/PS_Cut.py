@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
 # %% This File Cuts Puget Sound images into small 1000 X 250 patches for standard scale.
 import json
 import os
@@ -12,11 +14,11 @@ from pycocotools import mask as maskUtils
 np.random.seed(0)
 
 # %%
-data_root = os.path.join('/home/miao/datasets/wwf_ghostnet',
+data_root = os.path.join('~/datasets/wwf_ghostnet',
                          'Ghostnet-labeldata-2024-04-04')
 ann_path = os.path.join(data_root, '05042025.json')
 
-cut_data_root = '/home/miao/datasets/wwf_seg/PugetSound/2024_04_04_cut'
+cut_data_root = '~/datasets/wwf_seg/PugetSound/2024_04_04_cut'
 cut_ann_path = os.path.join(cut_data_root, 'SegAnn/2024_04_04_cut.json')
 
 # %%
