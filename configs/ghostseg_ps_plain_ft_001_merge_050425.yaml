@@ -1,0 +1,30 @@
+# training
+conf_id: GhostSeg_PS_Plain_FT_001_merge_050425 
+algorithm: Plain
+num_iters: 30000
+log_interval: 10
+parallel: 0
+
+# data
+dataset_root: /home/miao/datasets/wwf_seg/
+dataset_name: GhostSeg_DEPS
+num_classes: 2
+batch_size: 16
+num_workers: 32
+
+# model
+model_name: DeepLabV3_ResNet50
+weights_init: ./weights/GhostSeg_DE/Plain/GhostSeg_DE_Plain_111824-0-epoch=2514-valid_mean_IoU=0.77.ckpt
+
+# optim
+## feature
+lr_feature: 0.001
+momentum_feature: 0.9
+weight_decay_feature: 0.0004
+## classifier
+lr_classifier: 0.01
+momentum_classifier: 0.9
+weight_decay_classifier: 0.0004
+## lr_scheduler
+step_size: 10000
+gamma: 0.1
