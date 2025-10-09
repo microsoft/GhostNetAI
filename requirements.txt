@@ -1,0 +1,16 @@
+click==8.1.8
+geopandas==1.0.1
+lightning==2.5.1.post0
+matplotlib==3.10.1
+munch==4.0.0
+numpy==2.2.5
+opencv-python==4.11.0.86
+pandas==2.2.3
+pycocotools==2.0.8
+PyYAML==6.0.2
+shapely==2.1.0
+tensorboard==2.19.0
+torch==2.6.0
+torchvision==0.21.0
+tqdm==4.67.1
+typer==0.15.3
