@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
+### Adapted from https://github.com/VainF/DeepLabV3Plus-Pytorch
 import collections
 import torch
 import torchvision.transforms.functional as F
