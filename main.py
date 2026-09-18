@@ -1,10 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 import os
-import yaml
-import numpy as np
 import typer
-from munch import Munch
 
 import torch
 import lightning as L
@@ -13,6 +10,8 @@ from lightning.pytorch.loggers import CSVLogger, TensorBoardLogger
 from lightning.pytorch.strategies.ddp import DDPStrategy
 
 from src import algorithms, datasets
+from src.checkpoints import load_weights
+from src.config import load_config, select_component
 
 app = typer.Typer(pretty_exceptions_short=True, pretty_exceptions_show_locals=False)
 
@@ -33,8 +32,9 @@ def main(config:str='./configs/ghostset_de_plain_111824.yaml',
     ############
     # Set gpus #
     ############
-    gpus = gpus if torch.cuda.is_available() else None
-    gpus = [int(i) for i in gpus.split(',')]
+    gpus = [int(i) for i in gpus.split(',')] if accelerator == 'gpu' else []
+    if accelerator == 'gpu' and not torch.cuda.is_available():
+        raise ValueError("CUDA is unavailable; use --accelerator cpu")
  
     #############################
     # Set environment variables #
@@ -49,8 +49,7 @@ def main(config:str='./configs/ghostset_de_plain_111824.yaml',
     #######################
     # Load configurations #
     #######################
-    with open(config) as f:
-        conf = Munch(yaml.load(f, Loader=yaml.FullLoader))
+    conf = load_config(config)
     conf.session = session
     conf.evaluate = evaluate
     conf.val = val
@@ -66,8 +65,17 @@ def main(config:str='./configs/ghostset_de_plain_111824.yaml',
     ###########################
     # Load data and algorithm #
     ###########################
-    dataset = datasets.__dict__[conf.dataset_name](conf=conf)
-    learner = algorithms.__dict__[conf.algorithm](conf=conf)
+    dataset_class = select_component(datasets.DATASETS, conf.dataset_name, "dataset")
+    algorithm_class = select_component(algorithms.ALGORITHMS, conf.algorithm, "algorithm")
+    learner = algorithm_class(conf=conf)
+    if evaluate is not None:
+        load_weights(learner, evaluate)
+    elif conf.weights_init:
+        result = load_weights(learner, conf.weights_init, strict=False)
+        if result.missing_keys or result.unexpected_keys:
+            print(f"Initial weights: missing keys={result.missing_keys}, "
+                  f"unexpected keys={result.unexpected_keys}")
+    dataset = dataset_class(conf=conf)
 
     ###############
     # Load logger #
@@ -86,6 +94,8 @@ def main(config:str='./configs/ghostset_de_plain_111824.yaml',
             name='{}_{}'.format(conf.algorithm, conf.conf_id),
             version=session
         )
+    else:
+        raise ValueError("logger_type must be csv or tensorboard")
 
     ##################
     # Load callbacks #
@@ -111,7 +121,7 @@ def main(config:str='./configs/ghostset_de_plain_111824.yaml',
         callbacks=[lr_monitor, checkpoint_callback],
         # strategy=DDPStrategy(find_unused_parameters=False),
         # strategy='auto',
-        strategy='auto' if accelerator=='cpu' or len(gpus)>1 else 'ddp',
+        strategy='auto',
         num_sanity_val_steps=1,
         # profiler='simple',
         # precision=16,
@@ -123,15 +133,13 @@ def main(config:str='./configs/ghostset_de_plain_111824.yaml',
     #######
     if evaluate is not None:
         if val:
-            trainer.validate(learner, datamodule=dataset, ckpt_path=evaluate)
+            trainer.validate(learner, datamodule=dataset)
         elif predict:
-            trainer.predict(learner, datamodule=dataset, ckpt_path=evaluate)
+            trainer.predict(learner, datamodule=dataset, return_predictions=False)
         else:
-            trainer.test(learner, datamodule=dataset, ckpt_path=evaluate)
+            trainer.test(learner, datamodule=dataset)
         
     else:
-        if conf.weights_init:
-            learner.load_state_dict(torch.load(conf.weights_init)['state_dict'], strict=False)
         trainer.fit(learner, datamodule=dataset)
 
 if __name__ == '__main__':
