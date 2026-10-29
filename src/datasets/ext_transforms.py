@@ -13,6 +13,26 @@ from PIL import Image
 from torchvision.transforms import v2
 from torchvision.transforms.v2 import functional as F
 from typing import Union, Tuple, Dict, Any
+from src.safety import MAX_IMAGE_DIMENSION, bounded_integer, bounded_number, image_dimensions
+
+
+def _matching_images(img, lbl):
+    if img.size != lbl.size:
+        raise ValueError(f"image and label sizes must match: {img.size}, {lbl.size}")
+    image_dimensions(*img.size)
+
+
+def _crop_size(size):
+    if isinstance(size, numbers.Integral):
+        size = (size, size)
+    if not isinstance(size, (tuple, list)) or len(size) != 2:
+        raise ValueError("crop size must be an integer or (height, width)")
+    image_dimensions(size[1], size[0])
+    return tuple(size)
+
+
+def _scale(value):
+    return bounded_number(value, "scale", 1e-6, 8)
 
 
 #
@@ -96,6 +116,11 @@ class ExtCenterCrop(object):
 
 class ExtRandomScale(object):
     def __init__(self, scale_range, interpolation=Image.BILINEAR):
+        if not isinstance(scale_range, (tuple, list)) or len(scale_range) != 2:
+            raise ValueError("scale_range must contain two positive finite numbers")
+        low, high = (_scale(value) for value in scale_range)
+        if low > high:
+            raise ValueError("scale_range must be ordered")
         self.scale_range = scale_range
         self.interpolation = interpolation
 
@@ -108,9 +133,10 @@ class ExtRandomScale(object):
             PIL Image: Rescaled image.
             PIL Image: Rescaled label.
         """
-        assert img.size == lbl.size
+        _matching_images(img, lbl)
         scale = random.uniform(self.scale_range[0], self.scale_range[1])
         target_size = ( int(img.size[1]*scale), int(img.size[0]*scale) )
+        image_dimensions(target_size[1], target_size[0])
         return F.resize(img, target_size, _interpolation_modes_from_int(self.interpolation)), F.resize(lbl, target_size, _interpolation_modes_from_int(Image.NEAREST))
 
     def __repr__(self):
@@ -126,7 +152,7 @@ class ExtScale(object):
     """
 
     def __init__(self, scale, interpolation=Image.BILINEAR):
-        self.scale = scale
+        self.scale = _scale(scale)
         self.interpolation = interpolation
 
     def __call__(self, img, lbl):
@@ -138,8 +164,9 @@ class ExtScale(object):
             PIL Image: Rescaled image.
             PIL Image: Rescaled label.
         """
-        assert img.size == lbl.size
+        _matching_images(img, lbl)
         target_size = ( int(img.size[1]*self.scale), int(img.size[0]*self.scale) ) # (H, W)
+        image_dimensions(target_size[1], target_size[0])
         return F.resize(img, target_size, _interpolation_modes_from_int(self.interpolation)), F.resize(lbl, target_size, _interpolation_modes_from_int(Image.NEAREST))
 
     def __repr__(self):
@@ -339,11 +366,15 @@ class ExtRandomCrop(object):
     """
 
     def __init__(self, size, padding=0, pad_if_needed=False):
-        if isinstance(size, numbers.Number):
-            self.size = (int(size), int(size))
-        else:
-            self.size = size
-        self.padding = padding
+        self.size = _crop_size(size)
+        if isinstance(padding, numbers.Integral):
+            padding = (padding,) * 4
+        elif isinstance(padding, (tuple, list)) and len(padding) == 2:
+            padding = tuple(padding) * 2
+        if not isinstance(padding, (tuple, list)) or len(padding) != 4:
+            raise ValueError("padding must have one, two, or four integer values")
+        self.padding = tuple(bounded_integer(value, "padding", 0, MAX_IMAGE_DIMENSION)
+                             for value in padding)
         self.pad_if_needed = pad_if_needed
 
     @staticmethod
@@ -356,7 +387,9 @@ class ExtRandomCrop(object):
             tuple: params (i, j, h, w) to be passed to ``crop`` for random crop.
         """
         w, h = img.size
-        th, tw = output_size
+        th, tw = _crop_size(output_size)
+        if h < th or w < tw:
+            raise ValueError("crop exceeds image dimensions; enable pad_if_needed")
         if w == tw and h == th:
             return 0, 0, h, w
 
@@ -373,20 +406,20 @@ class ExtRandomCrop(object):
             PIL Image: Cropped image.
             PIL Image: Cropped label.
         """
-        assert img.size == lbl.size, 'size of img and lbl should be the same. %s, %s'%(img.size, lbl.size)
-        if self.padding > 0:
+        _matching_images(img, lbl)
+        if any(self.padding):
+            image_dimensions(img.width + self.padding[0] + self.padding[2],
+                             img.height + self.padding[1] + self.padding[3])
             img = F.pad(img, self.padding)
             lbl = F.pad(lbl, self.padding)
 
-        # pad the width if needed
-        if self.pad_if_needed and img.size[0] < self.size[1]:
-            img = F.pad(img, padding=int((1 + self.size[1] - img.size[0]) / 2))
-            lbl = F.pad(lbl, padding=int((1 + self.size[1] - lbl.size[0]) / 2))
-
-        # pad the height if needed
-        if self.pad_if_needed and img.size[1] < self.size[0]:
-            img = F.pad(img, padding=int((1 + self.size[0] - img.size[1]) / 2))
-            lbl = F.pad(lbl, padding=int((1 + self.size[0] - lbl.size[1]) / 2))
+        if self.pad_if_needed:
+            width = max(0, self.size[1] - img.width)
+            height = max(0, self.size[0] - img.height)
+            image_dimensions(img.width + width, img.height + height)
+            padding = [width // 2, height // 2, width - width // 2, height - height // 2]
+            img = F.pad(img, padding)
+            lbl = F.pad(lbl, padding)
 
         i, j, h, w = self.get_params(img, self.size)
 
@@ -653,5 +686,4 @@ class ExtRandomGaussianBlur(v2.Transform):
         else:
             # Handle single input (image only)
             return self._transform(sample, params), lbl
-
 

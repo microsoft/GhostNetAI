@@ -4,15 +4,16 @@
 import os
 import numpy as np
 from PIL import Image
-from glob import glob
-
-from pycocotools.coco import COCO
+from pathlib import Path
+import torch
 
 from torch.utils.data import Dataset, DataLoader, ConcatDataset
 from torchvision import transforms
 import lightning as L
 
 from .ext_transforms import *
+from .input_validation import dataset_path, load_coco, load_image, validate_annotations
+from src.safety import MAX_DATASET_IMAGES, image_dimensions
 # from ext_transforms import *
 
 __all__ = ['GhostSeg_DE',
@@ -65,8 +66,11 @@ class GhostSegDS(Dataset):
         self.load_data(dset)
 
     def load_data(self, dset):
+        if len(self.ann_coco.imgs) > MAX_DATASET_IMAGES:
+            raise ValueError("dataset image count exceeds its limit")
         for img_id in self.ann_coco.getImgIds():
             img_info = self.ann_coco.imgs[img_id]
+            image_dimensions(img_info['width'], img_info['height'])
             if img_info['height'] > 0 and img_info['width'] > 0:
                 if dset == 'train':
                     if 'train' in img_info['file_name'] or 'test' in img_info['file_name']:
@@ -79,16 +83,15 @@ class GhostSegDS(Dataset):
         
         img_id = self.img_ids[index]
         img_info = self.ann_coco.imgs[img_id]
-        img_anns = self.ann_coco.loadAnns(self.ann_coco.getAnnIds(imgIds=img_id))
+        img_anns = self.ann_coco.imgToAnns[img_id]
+        width, height = image_dimensions(img_info['width'], img_info['height'])
+        validate_annotations(img_anns, width, height)
+        file_id = str(dataset_path(self.dataset_root, img_info['file_name'], self.path_replace))
+        img = load_image(file_id, expected_size=(width, height))
             
-        mask = np.zeros((img_info['height'], img_info['width']), dtype=np.uint8)
+        mask = np.zeros((height, width), dtype=np.uint8)
         for i in range(len(img_anns)):
-            mask += self.ann_coco.annToMask(img_anns[i])
-        mask = np.clip(mask, 0, 1, out=mask)
-
-        file_id = os.path.join(self.dataset_root,
-                               img_info['file_name'].replace(self.path_replace, ''))
-        img = Image.open(file_id).convert('RGB')
+            np.maximum(mask, self.ann_coco.annToMask(img_anns[i]), out=mask)
         target = Image.fromarray(mask).convert('L')
         # target = Image.fromarray(mask * 255).convert('L')
 
@@ -115,12 +118,24 @@ class GhostSegDS_Pred(Dataset):
         self.load_data()
 
     def load_data(self):
-        self.data = glob(os.path.join(self.dataset_root, "**/*.{}".format(self.extension)), recursive=True)
+        root = Path(self.dataset_root).expanduser().resolve(strict=True)
+        if not root.is_dir():
+            raise ValueError("predict_root must be a directory")
+        self.dataset_root = root
+        self.data = []
+        for directory, _, filenames in os.walk(root, followlinks=False):
+            for filename in filenames:
+                if filename.lower().endswith("." + self.extension.lower()):
+                    if len(self.data) >= MAX_DATASET_IMAGES:
+                        raise ValueError("prediction image count exceeds its limit")
+                    relative = (Path(directory) / filename).relative_to(root)
+                    self.data.append(str(dataset_path(root, str(relative))))
 
     def __getitem__(self, index):
         
         data_path = self.data[index]
-        img = Image.open(data_path).convert('RGB')
+        path = dataset_path(self.dataset_root, os.path.relpath(data_path, self.dataset_root))
+        img = load_image(path)
 
         ori_size = img.size
 
@@ -146,7 +161,7 @@ class GhostSegDM(L.LightningDataModule):
         if not self.conf.predict:
             # ann_coco = COCO(os.path.join(conf.dataset_root,
             #                              'SegAnn/Germany_ABS_11122024.json'))
-            ann_coco = COCO(self.ann_path)
+            ann_coco = load_coco(self.ann_path)
 
             self.dset_tr = GhostSegDS(ann_coco=ann_coco,
                                       dataset_root=conf.dataset_root,   
@@ -207,7 +222,7 @@ class GhostSeg_PS(GhostSegDM):
     def __init__(self, conf):
         super(GhostSeg_PS, self).__init__(conf=conf,
                                           ann_path=os.path.join(conf.dataset_root,
-                                                                '/SegAnn/2024_04_04_cut.json'),
+                                                                'SegAnn/2024_04_04_cut.json'),
                                           path_replace='')
         self.dataset_name = 'Puget Sound'
 
@@ -229,8 +244,8 @@ class GhostSeg_DEPS(GhostSegDM):
         if not self.conf.predict:
             # ann_coco = COCO(os.path.join(conf.dataset_root,
             #                              'SegAnn/Germany_ABS_11122024.json'))
-            ann_coco_de = COCO(self.ann_path_de)
-            ann_coco_ps = COCO(self.ann_path_ps)
+            ann_coco_de = load_coco(self.ann_path_de)
+            ann_coco_ps = load_coco(self.ann_path_ps)
 
             self.dset_tr_de = GhostSegDS(ann_coco=ann_coco_de,
                                          dataset_root=os.path.join(conf.dataset_root, 'Germany'),   
